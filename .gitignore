@@ -1,0 +1,14 @@
+# Vagrant internal state and metadata
+.vagrant/
+
+# Generated Kubernetes join command (contains sensitive tokens)
+join.sh
+
+# Master initialization logs (contains tokens and cluster secrets)
+kubeadm-init.out
+
+# Log files
+*.log
+
+# Windows specific
+sh.exe.stackdump

@@ -60,19 +60,31 @@ sudo apt-get update -y
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
+echo "[TASK 5.5] Configure Kubelet node IP"
+# Automatically identify enp0s8 as the internal interface
+IFACE="enp0s8"
+LOCAL_IP=$(ip addr show $IFACE | grep "inet " | awk '{print $2}' | cut -d / -f 1)
+echo "KUBELET_EXTRA_ARGS=--node-ip=$LOCAL_IP" | sudo tee /etc/default/kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
 if [[ "$ROLE" == "master" ]]; then
   echo "[TASK 6] Initialize Kubernetes master"
-  sudo kubeadm init --apiserver-advertise-address=${MASTER_IP} \
-    --pod-network-cidr=${POD_NETWORK_CIDR} \
-    --kubernetes-version=v${K8S_VERSION} | tee /vagrant/kubeadm-init.out
+  # Use --apiserver-advertise-address to bind to the private IP
+  sudo kubeadm init --apiserver-advertise-address=$LOCAL_IP \
+    --pod-network-cidr=10.244.0.0/16 \
+    --kubernetes-version=v1.30.0 | tee /vagrant/kubeadm-init.out
 
   echo "[TASK 7] Configure kubeconfig for vagrant user"
-  mkdir -p $HOME/.kube
-  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+  mkdir -p /home/vagrant/.kube
+  sudo cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+  sudo chown 1000:1000 /home/vagrant/.kube/config
 
-  echo "[TASK 8] Deploy Flannel CNI"
-  kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+  echo "[TASK 8] Deploy Flannel CNI with interface fix"
+    # Download manifest and inject the --iface flag automatically
+    curl -sSL https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml | \
+      sed "s/args:/args:\n        - --iface=$IFACE/" | kubectl apply -f -
+fi
 
   echo "[TASK 9] Generate join command for workers"
   kubeadm token create --print-join-command | tee /vagrant/join.sh
