@@ -1,10 +1,12 @@
 Vagrant.configure("2") do |config|
-  # Common VM box
   config.vm.box = "ubuntu/jammy64"
 
-  # Disable GUI globally unless really needed
+  # Global VirtualBox Settings
   config.vm.provider "virtualbox" do |vb|
-    vb.gui = true
+    vb.gui = true  # Kept as requested
+    vb.linked_clone = true
+    # This helps with clock sync issues common on Windows hosts
+    vb.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 1000]
   end
 
   # Master node
@@ -12,31 +14,22 @@ Vagrant.configure("2") do |config|
     node.vm.hostname = "k8s-master"
     node.vm.network "private_network", ip: "192.168.56.11"
     node.vm.provider "virtualbox" do |vb|
-      vb.memory = 4072  # More RAM for control-plane stability
-      vb.cpus = 4
+      vb.memory = 4096
+      vb.cpus = 2 # Your CPU has 12 cores, so 2 is very safe
     end
     node.vm.provision "shell", path: "bootstrap.sh"
   end
 
-  # Worker 1
-  config.vm.define "k8s-worker1" do |node|
-    node.vm.hostname = "k8s-worker1"
-    node.vm.network "private_network", ip: "192.168.56.12"
-    node.vm.provider "virtualbox" do |vb|
-      vb.memory = 4096
-      vb.cpus = 3
+  # Workers - Loop to keep code clean
+  (1..2).each do |i|
+    config.vm.define "k8s-worker#{i}" do |node|
+      node.vm.hostname = "k8s-worker#{i}"
+      node.vm.network "private_network", ip: "192.168.56.#{11 + i}"
+      node.vm.provider "virtualbox" do |vb|
+        vb.memory = 2048
+        vb.cpus = 2
+      end
+      node.vm.provision "shell", path: "bootstrap.sh"
     end
-    node.vm.provision "shell", path: "bootstrap.sh"
-  end
-
-  # Worker 2
-  config.vm.define "k8s-worker2" do |node|
-    node.vm.hostname = "k8s-worker2"
-    node.vm.network "private_network", ip: "192.168.56.13"
-    node.vm.provider "virtualbox" do |vb|
-      vb.memory = 4096
-      vb.cpus = 3
-    end
-    node.vm.provision "shell", path: "scripts/bootstrap.sh", run: "once"
   end
 end
